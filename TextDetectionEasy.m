@@ -5,67 +5,39 @@ clc; close all; clear;
 
 %% Step 1: Load image
 
-% colorImage = imread('imgs/testPic1.jpg');
-% colorImage = imread('imgs/testPic2.jpg');
-% colorImage = imread('imgs/testPic3.jpg');
-% colorImage = imread('imgs/testPic4.jpg');
-colorImage = imread('imgs/testPic5.jpg');
-% colorImage = imread('imgs/testPic6.png');
-
 % colorImage = imread('imgs/testFont1.jpg');
 % colorImage = imread('imgs/testFont2.jpg');
-% colorImage = imread('imgs/testFont3.jpg');
+colorImage = imread('imgs/testFont3.jpg');
 
+grayImage = rgb2gray(colorImage);
 
 figure; imshow(colorImage); title('Original image')
 
-%% Step 2: setup parameter called helperDetectText
-textPolarity = 'DarkTextOnLight';
-sizeRange = [30, 10000];
-eccentricityThreshold = 0.99;
-maxStrokeWidthVariation = 0.35;
-solidityRange = [0, 1];
-morphologyOpenRadius = 25;
-morphologyCloseRadius = 7;
-%% Step 3: call helperDetectText
-[boundingBoxesDark,segmentedCharacterMaskDark] = helperDetectText(colorImage,...
-    'TextPolarity',textPolarity,...
-    'SizeRange', sizeRange,...
-    'MaxEccentricity', eccentricityThreshold,...
-    'MaxStrokeWidthVariation', maxStrokeWidthVariation,...
-    'SolidityRange', solidityRange,...
-    'MorphologyOpenRadius', morphologyOpenRadius,...
-    'MorphologyCloseRadius', morphologyCloseRadius);
-%% Step 4: display result from helperDetectText
-label_str_box = cell(1,1);
-for i = 1:size(boundingBoxesDark, 1)
-    label_str_box{i} = ['Box: ' num2str(i)];
-end
-Ibox = insertObjectAnnotation(colorImage, 'rectangle', boundingBoxesDark, ...
-    label_str_box, 'Color', 'yello');
-figure; imshow(Ibox), title('boundingBoxes');
+%% Step 2: thresh manual
+
+segmentedCharacterMaskDark = ~im2bw(grayImage, graythresh(grayImage));
 
 figure; imshow(segmentedCharacterMaskDark); title('segmentedCharacterMask'); 
 
-%% Step 5: list charactor from helperDetectText and label to display
-connCompDark = bwconncomp(segmentedCharacterMaskDark);
-statsDark = regionprops(connCompDark,'BoundingBox','Area');
+%% Step 3: list charactor from helperDetectText and label to display
+connComp = bwconncomp(segmentedCharacterMaskDark);
+stats = regionprops(connComp,'BoundingBox','Area');
 
-bboxesDark = vertcat(statsDark.BoundingBox);
-label_str_dark = cell(1,1);
-for i = 1:connCompDark.NumObjects
-    label_str_dark{i} = ['' num2str(i)];
+bboxes = vertcat(stats.BoundingBox);
+label_str = cell(1,1);
+for i = 1:connComp.NumObjects
+    label_str{i} = ['' num2str(i)];
 end
-%% Step 6: Display candidate character
-IresultCandidate = insertObjectAnnotation(colorImage, 'rectangle', bboxesDark, ...
-    label_str_dark, 'Color', 'yello');
+%% Step 4: Display candidate character
+IresultCandidate = insertObjectAnnotation(colorImage, 'rectangle', bboxes, ...
+    label_str, 'Color', 'yello');
 figure; imshow(IresultCandidate), title('Result candidate character');
-%% Step 7: Load model
-load('imgHndFnt.mat', 'categoryClassifier');
-% load('fnt.mat', 'categoryClassifier');
+%% Step 5: Load model
+% load('imgHndFnt.mat', 'categoryClassifier');
+load('fnt.mat', 'categoryClassifier');
 % load('hnd.mat', 'categoryClassifier');
 % load('goodImg.mat', 'categoryClassifier');
-%% Step 8: Define map
+%% Step 6: Define map
 k = {'Sample001', 'Sample002', 'Sample003', 'Sample004', 'Sample005',...
     'Sample006', 'Sample007', 'Sample008', 'Sample009', 'Sample010',...
     'Sample011', 'Sample012', 'Sample013', 'Sample014', 'Sample015',...
@@ -95,13 +67,13 @@ v = {'0', '1', '2', '3', '4',...
     'y', 'z'};
 
 charactorMap = containers.Map(k, v);
-%% Step 8: Character recognition
+%% Step 7: Character recognition
 
 bboxesRecognize = [];
 label_str_result = cell(0,0);
 maxScores = [];
-for i = 1:connCompDark.NumObjects
-    ITmpCrop = imcrop(colorImage, bboxesDark(i, :));
+for i = 1:connComp.NumObjects
+    ITmpCrop = imcrop(colorImage, bboxes(i, :));
     [labelIdx, scores] = predict(categoryClassifier, ITmpCrop);
     predictedLabel = categoryClassifier.Labels(labelIdx);
     predictedLabelCharacter = charactorMap(predictedLabel{1});
@@ -109,7 +81,7 @@ for i = 1:connCompDark.NumObjects
     maxScores(end+1) = max(scores);
     % Remove score <= -0.5
     if max(scores) >= -0.5
-        bboxesRecognize(end+1,:) = bboxesDark(i, :);
+        bboxesRecognize(end+1,:) = bboxes(i, :);
         label_str_result{end+1} = ['' predictedLabelCharacter];
     end
 end
